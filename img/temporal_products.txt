@@ -1,0 +1,10 @@
++------------+
+| products   |
++------------+
+| id         |
+| name       |
+| price      |
+| valid_from |
+| valid_til  |
+| cEEE       |
++------------+

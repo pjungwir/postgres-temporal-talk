@@ -1,0 +1,20 @@
+ +----------------+
+ | Date_Dimension |
+ +----------------+
+ | year           |                               +-------------------+
+ | month          |                           +-> | Product_Dimension |
+ | day_of_month   | <-+  +-----------------+  |   +-------------------+
+ | day_of_week    |   |  | Sales_Facts     |  |   | sku               |
+ | cEEE           |   +- +-----------------+  |   | name              |
+ +----------------+      | sale_price      | -+   | description       |
+                         | quantity_sold   |      | unit_price        |
+                      +- | cEEE            |      | weight            |
++-----------------+   |  +-----------------+      | vendor_name       |
+| Store_Dimension | <-+                           | vendor_rating     |
++-----------------+                               | category          |
+| name            |                               | cEEE              |
+| manager_name    |                               +-------------------+
+| city            |
+| state           |
+| cEEE            |
++-----------------+

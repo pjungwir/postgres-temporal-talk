@@ -4,10 +4,11 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-		<title>reveal.js</title>
+		<title>Temporal Databases: Theory and Postgres</title>
 
 		<link rel="stylesheet" href="css/reveal.css">
 		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/custom.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/zenburn.css">
@@ -24,8 +25,12 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section data-markdown="slides.md"
+                 data-separator="^\n\n\n"
+                 data-separator-vertical="^\n\n"
+                 data-separator-notes="^Note:"
+                 data-charset="utf-8">
+        </section>
 			</div>
 		</div>
 
@@ -44,6 +49,11 @@
 					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
 				]
 			});
+      Reveal.configure({
+        keyboard: {
+          221: function() { Reveal.slide( Number.MAX_VALUE ); },
+        }
+      });
 		</script>
 	</body>
 </html>
