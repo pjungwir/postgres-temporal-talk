@@ -36,7 +36,7 @@ Note:
 - Accidentally changing history is especially acute in OLTP databases where everything is normalized.
 - Almost every project I see the need.
   - show slides
-  - Also apparently agriculture: Snodgrass has the cattle example, Date & Darwen teamed up with Lorentzos at the Agricultural University of Agriculture, and a temporal Rails plugin is by the Italian Fund for Agricultural Development. I don't know why temporal databases are so popular among ag people.
+  - Also apparently agriculture: Snodgrass has the cattle example, Date & Darwen teamed up with Lorentzos at the Agricultural University of Athens, and a temporal Rails plugin is by the Italian Fund for Agricultural Development. I don't know why temporal databases are so popular among ag people.
 - Today people just tolerate the errors, e.g. you can't generate your 2014 sales report and get the same numbers as before.
 
 
@@ -265,6 +265,7 @@ Note:
 - Also very influential on Postgres range types.
 - Very mathematical; Date & Darwen in their other books are strict purists: no nulls, no duplicate rows. I hope you weren't expecting to see any S-Q-L! This book has a similar rigor but is still very practical.
 - Anyway we have this problem of non-unique primary keys, but we still want some kind of constraint....
+
 
 
 # Exclusion constraints
@@ -1130,6 +1131,7 @@ Note:
 - `GENERATED` columns are part of the SQL standard and a patch has been in commitfests for the last year.
 
 
+
 # Thanks!
 <!-- .slide: style="font-size: 30%" -->
 
@@ -1168,3 +1170,9 @@ Note:
 - https://github.com/arkhipov/temporal_tables
 - https://www.youtube.com/watch?v=TRgni5q0YM8
 - https://github.com/ifad/chronomodel
+
+Note:
+
+- The slides are on Github and include my speaker notes, so hopefully they are more useful than just the pictures.
+
+8:24 start (this computer's clock) - 9:32 end = 1h08m yikes!
