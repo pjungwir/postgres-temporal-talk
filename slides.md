@@ -803,10 +803,6 @@ Note:
 
 
 
-![WAT](img/wat.png)
-
-
-
 # Range
 <!-- .slide: data-transition="slide none" -->
 
