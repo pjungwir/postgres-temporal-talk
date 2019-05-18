@@ -917,6 +917,22 @@ Note:
 
 
 
+# DML
+
+```sql
+INSERT INTO products (id, price, valid_at)
+VALUES (1, 5, tstzrange(.....);
+
+UPDATE products
+FOR PORTION OF valid_at FROM t1 TO t2
+SET price = 4
+WHERE id = 1;
+
+DELETE FROM products
+FOR PORTION OF valid_at FROM t1 TO t2
+WHERE id = 1;
+```
+
 # System Time
 
 ```sql
