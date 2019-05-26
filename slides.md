@@ -2,8 +2,35 @@
 ## Theory and Postgres
 
 Paul A. Jungwirth<br/>
-21 February 2019<br/>
-pdxpug
+31 May 2019<br/>
+PGCon 2019
+
+Note:
+
+- Thanks for coming!
+- I'm Paul Jungwirth....
+- independent consultant/programmer from Portland, OR
+
+- used Postgres since ~2010.
+- I've done substantial professional work in Oracle, MySQL, and MS SQL Server, but Postgres is by far the best.
+
+- Not a contributor but I've written a bunch of extensions.
+- Since I'm from Portland: they're pretty obscure, you probably haven't heard of them.
+
+- Actually I did dip my toe in the contributor waters a few years ago:
+- I wrote a patch adding UUID support to `btree_gist`, which we'll see is actually relevant to temporal databases.
+- Also I have a few patches waiting for review now for more temporal db support.
+- (We'll get to those.)
+
+- I've been interested in temporal databases for several years,
+- I've read 3/4ths of the books in English and a lot of the papers.
+- Almost every project I work on I wish I had easy temporal database support.
+- Now that SQL:2011 has standardized some of the functionality,
+  more and more vendors are supporting it,
+  and I hope Postgres will too!
+- I want to give an overview of temporal concepts and features,
+  and then talk about SQL:2011 and Postgres.
+- Finally I'll give a quick survey of SQL:2011 in the other RDBMSes out there.
 
 
 
@@ -12,12 +39,32 @@ pdxpug
 
 time-series | temporal
 ----------- | --------
+single timestamp | two timestamps
 records events       | records things
 IoT sensors, finance | auditing, history
 challenge is scale   | challenge is complexity
 Partitioning         | ranges, exclusion constraints
-Influx               | Datomic, Oracle, DB2, MySQL
 Citus, TimescaleDB   | Teradata, `temporal_tables`
+
+Note:
+
+- So first of all, a temporal database is not the same as a time-series database.
+- Nowadays time-series is all the rage, with web analytics, advertising, IoT sensor data.
+- Temporal is something else.
+- In time-series every record has a single time stamp; in temporal every record has two: start & end.
+- In time-series you record events; in temporal, things (different versions throughout the thing's lifetime)
+- Purposes: temporal has two: the history of changes to the database, the history of the thing "out there".
+- Challenges:
+  - timeseries: scale (but the structure is simpler)
+  - temporal: moderate scale, but lots of complexity. Correctness is a challenge.
+- Tools in Postgres:
+  - timeseries: partitioning
+  - temporal: ranges, exclusion constraints: very solid foundation, but no higher-level concepts yet
+- Products in Postgres:
+  - timeseries: Citus, TimescaleDB
+  - temporal:
+    - Teradata has had support for a long time
+    - `temporal_tables` extension gives you one dimension (db history) but not the other (thing history).
 
 
 
@@ -25,19 +72,46 @@ Citus, TimescaleDB   | Teradata, `temporal_tables`
 
 <!-- .slide: style="font-size: 80%" -->
 - e-commerce: product price
-- e-commerce: product vendor shipping options <!-- .element: class="fragment" -->
-- e-commerce: product searchable description <!-- .element: class="fragment" -->
 - real estate: house renovations <!-- .element: class="fragment" -->
 - employees: position, salary, employment period <!-- .element: class="fragment" -->
 - questionnaires: changing questions, options <!-- .element: class="fragment" -->
 
 Note:
 
+- Instead of "temporal databases" maybe we should say "historical databases", because it's about tracking history.
+- (We could store future things too, but that's less common.)
+
 - Accidentally changing history is especially acute in OLTP databases where everything is normalized.
 - Almost every project I see the need.
   - show slides
-  - Also apparently agriculture: Snodgrass has the cattle example, Date & Darwen teamed up with Lorentzos at the Agricultural University of Athens, and a temporal Rails plugin is by the Italian Fund for Agricultural Development. I don't know why temporal databases are so popular among ag people.
-- Today people just tolerate the errors, e.g. you can't generate your 2014 sales report and get the same numbers as before.
+    - product price:
+      - stored on your `products` table
+      - when you change it, your orders don't add up any more.
+      - Of course everyone knows this, so they copy the price over to the `line_items` table.
+      - But this is an ad hoc solution.
+      - They aren't copying:
+        - the product tags,
+        - which countries the product was available in,
+        - the product's vendor's 00
+        - cost of inventory is really hard too
+      - In practice very few companies can re-generate their 2016 sales report and get the same answers as before.
+    - real estate:
+      - when did the property change?
+    - employees
+      - You can't give a database talk without an employees table.
+      - You might want to know their salary history, their former positions, former projects, etc.
+    - questionnaires:
+      - For 20 years I've been building the same app over and over:
+        - I call it "some users design forms, some users fill out forms."
+        - I bet a lot of you have been building this thing too.
+      - So what happens when you revise a question?
+      - What if you're asking for Ethnicity and you change the possible answers?
+      - In a normalized database you lose history, and sense can turn into nonsense.
+- Today people just tolerate the errors.
+- Retaining correct history requires foresight:
+  - Copying product price to the line item.
+  - Someone told me about a major fast food restaurant that wanted to brag about how much healthier their mayonnaise had become over time, but when they went to look up the details they found they no longer had the data.
+- Even when they solve it, they aren't aware of the 30 years of research, so they apply an ad hoc solution.
 
 
 
@@ -45,6 +119,17 @@ Note:
 # OLAP Problems Too
 
 ![star schema](img/star_schema.png)
+
+Note:
+
+- Reporting databases (OLAP, data warehouses) are denormalized, so duplication helps retain historical information.
+- Quintessential structure is a star schema:
+  - like a spreadsheet with just one level of normalization
+  - facts surrounded by dimensions
+- Facts capture history because they are almost always dated.
+- The dimensions don't necessarily have history.
+  - product changes
+  - stores come and ago and change
 
 
 
@@ -55,12 +140,8 @@ Note:
 
 Note:
 
-- Reporting databases (OLAP, data warehouses) are denormalized, so duplication helps retain historical information.
-- Quintessential structure is a star schema:
-  - like a spreadsheet with just one level of normalization
-  - facts surrounded by dimensions
-- Facts capture history because they are almost always dated.
-- The dimensions don't necessarily
+- Ralph Kimball, the #1 proponent & teacher about data warehouses, acknowledges this problem.
+- He calls these "slowly-changing dimensions" (SCDs).
 
 
 
@@ -71,6 +152,15 @@ Note:
 - Type III: Add a Column
 
 Note:
+
+- Slowly-changing dimensions are proof that even OLAP databases need temporal features.
+- I have to credit Tom Johnston (author of two books on temporal databases) for connecting SCDs to temporal features.
+  - He also brings some reality to Slowly-Changing Dimensions when he asks, "What do you mean slow?"
+
+- Basically none of Kimball's suggestions are very good:
+- SKIP IT!:
+  - Enough to say that nowadays there are also Types 0, 4, 5, 6, and 7!
+  - Kimball's work is amazing: my point is just that temporal data is not just a problem for normalized schemas.
 
 - Type I: overwrite it: ignore the problem: accept bad history.
 - Type II: add a row:
@@ -90,9 +180,6 @@ Note:
   - Type 7: Have both a Type I dimension and a Type II dimension!
   - This is getting complicated!
 
-- I have to credit Tom Johnston for making this criticism and connecting it to temporal databases.
-  - He also brings some reality to Slowly-Changing Dimensions when he asks, "What do you mean slow?"
-
 - The point isn't to criticize SCD,
   - but to use them as evidence that we need temporal databases, even in denormalized structures.
   - And if Facts are events, Dimensions are things, so they are a good fit for a temporal structure.
@@ -111,23 +198,38 @@ Note:
 
 Note:
 
+- If you want the start reading about temporal databases, this is the book.
+- It even comes as a free PDF.
 - From the late 90s
-- Lots of SQL
+- Lots of SQL, including many different dialects.
+- Tough to get through because of the combinatorial explosion:
+  - valid-time vs system-time vs bitemporal
+  - snapshot query vs sequenced vs non-sequenced
+  - inner join vs outer join
+  - Oracle vs DB2 vs Access vs Informix vs MS SQL Server vs UniSQL
+  - SELECT vs INSERT vs UPDATE vs DELETE
+- Compehensive: covers tons of ground and pulls it all together.
+- Snodgrass tried to get temporal features standardized back in the 90s.
+  - I was pretty annoyed to discover we could have had this stuff 20 years ago.
+  - But the criticisms had some good points, and maybe the wait was worth it.
 
 
 
+<!-- .slide: data-transition="slide none" -->
 # Temporal example
-
-![temporal products table](img/temporal_products.png)
 
 ![temporal products rows](img/products_rows.png)
 
+![temporal products timeline](img/products_timeline.png)
+
 Note:
 
-- Each row gets an extra start & end time.
+- So what does a temporal table even look like?
+- It gets two extra columns for start & end time.
 - Here I'm using months but it could be days, seconds, nanoseconds, or whatever.
 - A blank value means unbounded or infinite.
-- We can imagine these on a timeline.
+  - You could also use sentinels like Jan 3000.
+- It's nice to plot this on a timeline.
 
 - Can't we make do with just one timestamp?
 	- Just store the start date, and assume it ends when the next record starts?
@@ -135,41 +237,40 @@ Note:
 		- You could have gaps.
 	- Plus a single timestamp makes it really hard to query: each row needs info from outside itself.
 
+- Shocking that the primary key is not unique. (We'll talk more about that later.)
 
 
-# Valid-at Ranges
+
+<!-- .slide: data-transition="none slide" -->
+# Temporal example
 
 ![temporal products rows with ranges](img/products_rows_ranges.png)
 
 ![temporal products timeline](img/products_timeline.png)
 
-<!--
-<pre style="margin:0 auto; width:60%; background-color:white">
-
-                    <span style="color:#00aa00">1</span>
-                    <span style="color:#00aa00">*-------o</span>
-                            <span style="color:#00aa00">*-----></span>
-    <span style="color:#bbaa44">2</span>
-    <span style="color:#bbaa44">*-----------------------------></span>
-    <span style="color:#333333">|       |       |       |
-    2016    2017    2018    2019</span>
-
-</pre>
--->
-
 Note:
 
-- Postgres has built-in range types.
+- We can make a nice refinement here.
+- Postgres has built-in range types: combine two columns into one.
 - They are automatically closed/open, which is the convention.
 - Notation of [x,y), notation of `*---o` (algebra class).
 - Closed/open makes it easy for them to "snap together", used in most of the literature.
-- One disadvantage is you can't have a zero-width range: it's just a self-contradiction. But why would you want that?
+- One disadvantage is you can't have a zero-width range: it's just a self-contradiction.
+  - But why would you want that?
+  - If you have duration-less time periods then really you have events: get a time-series database.
 - Range types vs two columns:
-  - Lots of built-in operators (slide?)
+  - Lots of built-in operators
   - You can have a range on any type you want.
     - Builtin date/timestamp/int, but you can define a floatrange, or even e.g. my inetrange extension.
   - Exclusion constraints: easy to index
-  - Advantages indexing ranges vs a two-column btree index?
+  - Advantages indexing ranges vs a two-column btree index
+    - I *think* indexing an int+range gives you faster queries than indexing an int+timestamp+timestamp,
+      but I'm not sure.
+    - Maybe someone here could say for sure.
+    - Btw here's something I've often searched for and never found:
+      - I would love to hear a talk going into the data structure differences between B-Tree, GIN, and GiST, and *why* that makes them more or less suitable to different tasks.
+      - I'm especially confused because we have a built-in btree type that is different from GIN & GiST,
+        but then we have extensions called `btree_gin` and `btree_gist`.
 
 
 
@@ -187,6 +288,7 @@ Operator | Description | Example | Result
 
 Note:
 
+- Ranges come with a bunch of nice operators.
 - less than and greater than are not what I'd expect: they are more like alphabetical: compare the first letter, if it's tied compare the second letter.
 
 
@@ -207,6 +309,8 @@ Note:
 Note:
 
 - The `@>` and `<@` operators are some of my favorites, e.g. "was Fred employed at time t?"
+- Overlap is really useful too:
+  - include all the employees who were employed during 2018.
 
 
 
@@ -226,6 +330,21 @@ Note:
 
 - The "does not extend to the left/right of" operators are useful for building a temporal UPDATE trigger, although I don't know why they are negated. I've only ever used them with double negatives.
 
+- These operators bear some resemblance to the "Allen Relationships".
+- There are 13 ways that two ranges could be related to each other:
+  - A before B
+  - A touches B
+  - A overlaps some of B
+  - A overlaps all of B
+  - A subsumes B
+  - ...
+- Everyone who talks about temporal tables brings up the Allen Relationships.
+- You can read the Wikipedia page yourself.
+- It's not that complicated.
+- To be honest it doesn't seem worthy of getting your own Wikipedia page.
+- *But* if you don't have range types and you're implementing these comparisons yourself,
+  it is surprisingly hard to get them right. There are a lot of cases to cover.
+
 
 
 # Lots easier
@@ -241,6 +360,67 @@ WHERE employed_from < '2019-01-01'
 AND   '2018-01-01'  < employed_til
 ```
 
+Note:
+
+- Only two lines to do it yourself?
+- But two lines are very subtle.
+- To me anyway it's not obvious that that means "overlaps" and that it's correct.
+
+
+
+# Two Dimensions
+<!-- .slide: style="font-size: 60%" -->
+
+Valid Time | Transaction Time
+-----------|-----------------
+history of the thing | history of the database
+application features | auditing, compliance
+user can edit        | immutable
+maintained by your app | maintained by triggers
+constraints matter | look Ma, no hands!
+nothing | pg: `temporal_tables`, "A Tardis for Your ORM", `pg_audit_log`
+nothing | Rails: `papertrail`, `audited`, `chronomodel`
+
+Note:
+
+- So far I've only talked about valid-time.
+- But I mentioned there are at least two dimensions of meaningful history:
+  - the thing "out there"
+  - the history of changes to your database
+  - Some authors propose even more dimensions.
+- You could even have both dimensions for the same table!
+- Then you have two start/end pairs, i.e. two ranges.
+- Now it's really getting hard to understand.
+- The two dimensions don't necessary have the same "physical" representation:
+  - maybe the audit history is stored in a separate view.
+  - Snodgrass gives several implementation choices for bitemporal tables.
+
+- I'm going to talk almost exclusively about valid-time.
+  - This is the more interesting: the history of the thing.
+  - But it's harder.
+  - There are lots of solutions for system-time already.
+    - This is maintained automatically, e.g. by triggers.
+  - Valid-time is in the hands of your users: it's application-level functionality.
+    - Therefore constraints are more important.
+
+
+
+# Terminology
+<!-- .slide: style="font-size: 80%" -->
+
+|||&nbsp;
+-|-|-
+Snodgrass | valid time | transaction time
+Fowler    | actual time | record time
+Date/Darwen/Lorentzos | stated time | logged time
+Johnston | effective time/<br/>state time | assertion time
+SQL:2011 | application time | system time
+
+Note:
+
+- Btw, no one agrees on terminology.
+- There is actually a document called "The Consensus Glossary of Temporal Database Concepts" . . .from 1998.
+
 
 
 # Non-Unique PKs
@@ -249,10 +429,17 @@ AND   '2018-01-01'  < employed_til
 
 Note:
 
+- Let's start with the simplest possible thing: primary keys!
 - PKs can be non-unique, as long as their valid time doesn't overlap.
+  - So product 3 in red is invalid: the two versions overlap.
+  - If each row is supposed to be a true proposition,
+    this is like stating a contradiction.
+
+- But as long as the ranges don't overlap, the PK isn't unique.
 - Uniqueness is a pretty foundational idea; non-unique PKs is crazy!
 - No unique index will give us what we want.
-- Date/Darwen/Lorentzos: really you have one row per second, but we abbreviate it for performance and ease-of-use.
+  - I won't work that out, but you can try later if you want.
+- A great way of thinking about this comes from....
 
 
 
@@ -262,8 +449,17 @@ Note:
 
 Note:
 
+- Date/Darwen/Lorentzos: really you have one row per second, but we abbreviate it for performance and ease-of-use.
+  - Then you have real unique PKs: just include the time in the PK.
+  - But in the abbreviated form, we have this weird situation where there is no way to define a correct unique constraint.
+- If you've ready their other books you know they are very mathematical;
+ - strict purists:
+ - no nulls,
+ - no duplicate rows.
+ - I hope you weren't expecting to see any S-Q-L!
+ - This book has a similar rigor but is still very practical.
+- If you read one book about temporal databases, I'd read this one.
 - Also very influential on Postgres range types.
-- Very mathematical; Date & Darwen in their other books are strict purists: no nulls, no duplicate rows. I hope you weren't expecting to see any S-Q-L! This book has a similar rigor but is still very practical.
 - Anyway we have this problem of non-unique primary keys, but we still want some kind of constraint....
 
 
@@ -280,12 +476,29 @@ EXCLUDE USING gist
 
 Note:
 
-- We could call this a "temporal primary key".
+- Enter Exclusion Constraints!
 - Exclusion constraints are "generalized uniqueness constraints".
-- Exclusion constraints forbid any other row from evaluating to true on *all* the operators in its list. So it's okay if another row has an equal id, as long as its valid time doesn't overlap. And it's okay if another row has an overlapping valid time, as long as its id is different. But if another row has the same id and overlaps, that's not allowed.
-- You can see how you can always use an exclusion constraint in place of a uniqueness constraint: (flip to the next slide) But you can't go the other way. Exclusion constraints add something "new" to relational databases.
-- Like a uniqueness constraint, an exclusion constraint is always backed by an index to enforce it efficiently. Sometimes it can be a regular b-tree index, but when combining a scalar and a range it needs to be a GiST index like here.
-- As far as I know exclusion constraints are a Postgres-only innovation.
+- There must be no other rows where all the operators evaluate to true when compared to this row.
+  - If it has the same id *and* an overlapping valid time, then it's forbidden.
+- (show the next slide)
+
+
+
+# Exclusion constraints
+<!-- .slide: data-transition="none none" -->
+
+```
+ALTER TABLE products
+ADD CONSTRAINT pk_products
+EXCLUDE
+(id WITH =);
+```
+
+Note:
+
+- Here is an exclusion constraint that enforces ordinary uniqueness.
+- But exclusion constraints can do *more* than uniqueness constraints.
+- (next slide)
 
 
 
@@ -295,9 +508,19 @@ Note:
 ```
 ALTER TABLE products
 ADD CONSTRAINT pk_products
-EXCLUDE
-(id WITH =);
+EXCLUDE USING gist
+(id WITH =, valid_at WITH &&);
 ```
+
+Note:
+
+- It's okay if another row has the same id, as long as it's for a different time.
+- It's okay if two records has overlapping time, as long as they have different ids.
+- Like a uniqueness constraint, an exclusion constraint is always backed by an index to enforce it efficiently. Sometimes it can be a regular b-tree index, but when combining a scalar and a range it needs to be a GiST index like here.
+- As far as I know exclusion constraints are a Postgres-only innovation.
+
+- We could call this a "temporal primary key".
+- You can do this today, but Postgres doesn't *know* that it's a so-called primay key.
 
 
 
@@ -329,14 +552,15 @@ Note:
 
 
 
-# Temporal Foreign Keys
+# Foreign Keys
 <!-- .slide: data-transition="slide none" -->
 
 ![traditional foreign keys](img/variants_rows.png)
 
 Note:
 
-- First let's look at traditional referential integrity:
+- Now that we have primary keys, let's add foreign keys.
+- First let's look at *traditional* referential integrity:
 - Here is a "variants" table, common in e-commerce applications.
 - A product has one or more variants; every variant has a product.
 - It's a basic parent-child relationship.
@@ -358,6 +582,10 @@ Note:
 - Variant 1 is simple: its whole lifespan is fulfilled by the product 1.
 - Variant 2 is tricky: it didn't change when the product did, so its lifespan requires the *sum* of the records for product 1.
 - Variant 3 is invalid: it exists before its parent record.
+
+- I have a patch in the current Commit Fest that teaches Postgres how to implement temporal PKs and FKs.
+  - No cascading DELETE/UPDATE yet:
+    - I need temporal UPDATE/DELETE for that.
 
 
 
@@ -443,50 +671,6 @@ Note:
 
 
 
-# Two Dimensions
-<!-- .slide: style="font-size: 60%" -->
-
-Valid Time | Transaction Time
------------|-----------------
-history of the thing | history of the database
-application features | auditing, compliance
-user can edit        | immutable
-maintained by your app | maintained by triggers
-constraints matter | look Ma, no hands!
-nothing | pg: `temporal_tables`, "A Tardis for Your ORM", `pg_audit_log`
-nothing | Rails: `papertrail`, `audited`, `chronomodel`
-
-Note:
-
-- You could even have both dimensions for the same table!
-- Then you have two start/end pairs, i.e. two ranges.
-- Now it's really getting hard to understand.
-- The two dimensions don't necessary have the same "physical" representation:
-  - maybe the audit history is stored in a separate view.
-  - Snodgrass gives several implementation choices for bitemporal tables.
-
-
-
-# Terminology
-<!-- .slide: style="font-size: 80%" -->
-
-|||&nbsp;
--|-|-
-Snodgrass | valid time | transaction time
-Fowler    | actual time | record time
-Date/Darwen/Lorentzos | stated time | logged time
-Johnston | effective time/<br/>state time | assertion time
-SQL:2011 | application time | system time
-
-Note:
-
-- No one agrees
-- There is actually a document called "The Consensus Glossary of Temporal Database Concepts" . . .from 1998.
-- I've mostly talked about valid time, and I'll just focus on that going forward.
-- Transaction time is a little bit boring to me.
-
-
-
 # Queries
 <!-- .slide: style="font-size: 60%" -->
 
@@ -498,9 +682,14 @@ non-sequenced | time is just another column | returns ??? |
 
 Note:
 
+- So we have these tables, and we want to query them....
+- What kind of answers are we looking for?
+  - "What was true at time t?" - snapshot query: result is a non-temporal relation
+  - "Show me a history" - sequenced query: result is another temporal relation
 - Snapshot queries are especially useful for auditing (i.e. transaction time).
-  - You can judge the quality of an auditing extension by how easy it is to query the history: "Tardis" is great, `pg_audit_log` not so great.
+  - You can judge the quality of an auditing extension by how easy it is to query the history: "Tardis" is great, `pg_audit_log` is useful but not something I'd want to query a lot.
   - Of course snapshot queries are useful for valid-time too.
+- I'm not going to talk about non-sequenced queries because I've never found a plausible example of one.
 
 
 
@@ -513,8 +702,18 @@ Note:
 
 Note:
 
+- If we're doing queries of course we want joins.
+  - As I like to say, if you can't do joins all you have is a spreadsheet.
+- But joins are where things start to get hard.
+  - Ad hoc solutions uninformed by the research fall down right around here.
+  - You really want a principled approach to storing and querying temporal data.
 - Here you have two tables from a hospitality system.
-  - One for price, since that changes based on weekends, holidays, Valentine's Day.
+  - I'm more or less stolen this example from some researchers in Switzerland & Italy:
+    - Anton Dignös
+    - Michael Böhlen
+    - Johann Gamper
+    - apologies for my atrocious pronunciation
+  - One table for price, since that changes based on weekends, holidays, Valentine's Day.
   - Another for reservations: when is each guest staying.
   - Now we want to see what each stay costs.
 
@@ -548,6 +747,7 @@ Note:
 Note:
 
 - It's easier to see with a timeline.
+- Here are the JOINed inputs.
 
 
 
@@ -560,14 +760,8 @@ Note:
 
 Note:
 
-- Joins is where a systematic, rigorous approach really matters.
-  - papertrail gem: associations not really supported.
-    - These days it's in a separate gem, with a lot of limitations,
-      - e.g. only one level of association,
-      - can raise an error,
-      - won't let you change a foreign key, ...
-  - If you don't have joins, you really just have a spreadsheet.
-
+- Here is your result.
+- Implementing this is tough!
   - Even Snodgrass's original ideas started to fall apart somewhere around here.
     - He showed how to handle joins, but 
     - he proposed putting temporal modifiers at the *statement* level, like as part of the `SELECT` clause.
@@ -577,22 +771,23 @@ Note:
         - Queries didn't compose:
           - Putting a temporal query into a view, subquery, or CTE was a problem.
           - `SELECT * FROM t`: you lose information: the result isn't `t`.
-            - This also drops constraints like `NOT NULL`.
-              - I'd love to see a SQL paper where everything is `NOT NULL`, but you have Maybe types.
-            - But it also loses the temporal information.
 
 - These problems were pointed out back in the 90s by Date & co,
   - but I think they weren't really solved until recently,
   - by Anton Dignös, Michael Böhlen, and Johann Gamper, researchers in Switzerland & Italy.
-    - I'm stealing this example from their paper, sort of.
     - Instead of putting temporal qualifiers at the statement level,
     - they invent temporal variants of each operator in the relational algebra.
     - They show how to easily implement temporal variants of *all* relational operators (select, project, inner join, outer join, union, intersection, etc.) with just the traditional operators plus two new transforms, which they call `NORMALIZE` and `ALIGN`. The paper is a really easy read, so you should check it out!
     - Oh and they implemented it against Postgres 9.1, then 9.5, then submitted a patch against more recent versions.
     - They got some feedback about implementing their transforms in the wrong part of the query pipeline, and they submitted a patch fixing that, but I don't think anyone has responded to that.
+    - Hopefully once PG 12 ships their patch will get some attention.
+      - It is way more important than mine.
 
 - There is nothing in SQL:2011 about temporal joins.
   - You can manage to do an `INNER JOIN` with the `OVERLAPS` operator, but that's all.
+  - No outer joins
+  - no aggregates
+  - no union/intersect/difference
 
 
 
@@ -603,6 +798,7 @@ Note:
 
 Note:
 
+- So how do we manipulate temporal data?
 - In normal databases, each row makes an assertion, typically about "now".
 - In temporal databases, we assert something for a range in time.
 - So we want to add that assertion.
@@ -628,6 +824,7 @@ Note:
 
 Note:
 
+- But suppose we were INSERTing $5.....
 - This is not really what we want.
 
 
@@ -645,6 +842,7 @@ Note:
   - The database invisibly transforms our INSERT into an UPDATE, just moving the date of the original row.
   - If we inserted something in between two other ranges, it would even UPDATE one and DELETE the other!
 - So you need triggers or some kind of built-in functionality: the table has to know it's a temporal table.
+- What to do in Postgres about columns with no equality operator, e.g. json? (Cast json to jsonb first?) But is there a general solution?
 
 
 
@@ -657,7 +855,8 @@ Note:
 
 Note:
 
-- Can cause an INSERT, other UPDATEs.
+- We update just a selected range.
+- This UPDATE causes us to update two other records and INSERT another.
 - Also needs to COALESCE afterward.
 
 
@@ -682,7 +881,7 @@ Note:
 
 Note:
 
-- Can cause a DELETE.
+- Can even cause a DELETE, if our UPDATE spans multiple existing records.
 
 
 
@@ -693,17 +892,6 @@ Note:
 
 ![temporal UPDATE](img/products_update_2_timeline_result.png)
 
-Note:
-
-- There are lots of possibilities.
-- As an aside, there is something called the Allen Relationships:
-  - 13 different ways to ranges can relate to each other:
-  - overlaps, touches on the right, extends right, completely to the right of, etc. 
-  - I can't believe someone got their own Wikipedia page for this!
-  - But it's always nice to have something comprehensive and systematic, right?
-    - It's hard to make sure you're covering all the cases.
-  - You can look it up if you want.
-
 
 
 # Temporal DELETE
@@ -712,6 +900,10 @@ Note:
 ![temporal UPDATE](img/products_delete_timeline.png)
 
 ![temporal UPDATE](img/products_delete_timeline_result.png)<!-- .element style="visibility:hidden" -->
+
+Note:
+
+- Actually the delete is translated to two UPDATEs.
 
 
 
@@ -724,9 +916,8 @@ Note:
 
 Note:
 
-- Really simple!
-- Actually the delete is translated to two UPDATEs.
 - Of course a regular DELETE is possible too.
+- Even an INSERT is possible, if you DELETE in the middle of an existing record.
 
 
 
@@ -736,6 +927,18 @@ Note:
 ![temporal UPDATE](img/products_upsert_timeline.png)
 
 ![temporal UPDATE](img/products_upsert_timeline_result.png)<!-- .element style="visibility:hidden" -->
+
+Note:
+
+- aka `MERGE`
+- It's really useful!
+  - In a real application I built that lets you edit history this is what I used.
+  - If this were an INSERT it would violate our primary key.
+  - If this were an UPDATE it would lose the beginning.
+- Nothing about this in SQL:2011
+- Johnston calls this an `INSERT WHENEVER`
+- Postgres's own `INSERT ON CONFLICT` won't help you here,
+  - but I think we could teach it to.
 
 
 
@@ -748,50 +951,19 @@ Note:
 
 Note:
 
-- aka `MERGE`, `INSERT ON CONFLICT`.
-- Johnston calls this an `INSERT WHENEVER`
-- It's really useful!
-  - Despite all this research on temporal databases, going back 3+ decades, there is almost no "full stack" research:
-    - What is a good UX to let people edit the history of something?
-      - See a list of "versions".
-      - Merge two versions?
-      - Change the transition date?
-      - Cut off a version ("delete")?
-      - Wipe out the whole record completely, for all time?
-      - Save all the attributes at once (perfect for `UPSERT`), or save one attribute across multiple versions?
-      - Do you need a save button, or can it work with save-as-you-type?
-      - It's really complicated!
-    - extensions to CRUD? REST?
-    - Nice ORM presentation? (Martin Fowler, object models)
-    - Transactions
-
-
-
-### Intermediate Philosophical Digression from Temporal Databases
-
-![Aristotle](img/aristotle.jpg)<!-- .element style="height:210px" -->
-![Gottlob Frege](img/frege.jpg)<!-- .element style="height:210px" -->
-![Martin Heidegger](img/heidegger.jpg)<!-- .element style="height:210px" -->
-![E.F. Codd](img/codd.jpg)<!-- .element style="height:210px" -->
-![Bitemporal Data](img/johnston.jpg)<!-- .element style="height:210px" -->
-
-Note:
-
-- Are you ready for a digression?
-- Relational databases are grounded in set theory, which is grounded in propositional logic, so they go all the way back to Aristotle.
-- If you read Codd's 1970 paper, it's there: a table is a set, and each row is a *logical proposition*.
-- Johnston is happily aware of this, and even calls database design doing "ontology".
-  - I love it! I've always thought of programming as applied philosophy.
-  - It's like being in a real-life Hogwarts.
-  - And btw, the Latin Future Passive Participle is really useful.
-    - "It's almost as useful as the second person plural. We totally getandum one, y'all.")
-- Okay anyway, so databases are really propositional logic.
-- Now despite Aristotle's reputation as the most grounded of the Athenian philosophers,
-  proposition logic is almost always treated as *sub specie eternum*:
-  - that is we rarely qualify the statements temporally.
-  - It is mostly used in mathematics, where eternal truths are at home.
-  - But in the real world, we deal not with Being but with Becoming.
-  - So temporal databases are really a natural fit to any project that represents mortal things.
+- Despite all this research on temporal databases, going back 3+ decades, there is almost no "full stack" research:
+  - What is a good UX to let people edit the history of something?
+    - See a list of "versions".
+    - Merge two versions?
+    - Change the transition date?
+    - Cut off a version ("delete")?
+    - Wipe out the whole record completely, for all time?
+    - Save all the attributes at once (perfect for `UPSERT`), or save one attribute across multiple versions?
+    - Do you need a save button, or can it work with save-as-you-type?
+    - It's really complicated!
+  - extensions to CRUD? REST?
+  - Nice ORM presentation? (Martin Fowler, object models)
+  - Transactions
 
 
 
@@ -853,8 +1025,6 @@ Note:
 
 - SQL:2011 doesn't have range types,
   so they added this idea of a "period".
-- I usually uppercase it to denote that it's the SQL:2011 thing,
-  by association with the SQL keyword.
 - You see that you have separate start/end times,
   and you declare the PERIOD as a quasi-column.
 - Then you make a primary key with `WITHOUT OVERLAPS`.
@@ -883,7 +1053,6 @@ Note:
   - (In Postgres dates & times technically have `-Infinity` and `Infinity`,
     although I've found these are not always so well-supported in client programming languages and their database libraries.)
 - You can make GiST indexes on ranges, and make exclusion constraints.
-  - I *believe* `overlaps` with a GiST index on a range will be faster than a btree index on separate start/stop columns, but maybe I'm wrong.
 - Implementation is probably a chore too:
   - Everywhere Postgres accepts a column, we'd have to accept a column or a PERIOD.
     - So SELECT, WHERE, GROUP BY, HAVING, function arguments, some DDL commands (indexes, constraints)
@@ -910,10 +1079,11 @@ CREATE TABLE products (
 
 Note:
 
-- I'm working on a patch to support temporal primary & foreign keys.
+- In my own patch I accept ranges where the standard accepts PERIODs.
 - I'd like to support both PERIODs and ranges.
-- It's easy to accept a range column anywhere we accept a PERIOD.
-- Here is what you'd say with ranges.
+- Since the PERIOD name must not conflict with any column names,
+  it's easy to accept both without ambiguity.
+- Vik Fearing already has a patch that lets you declare PERIODs, but not use them.
 
 
 
@@ -933,6 +1103,16 @@ FOR PORTION OF valid_at FROM t1 TO t2
 WHERE id = 1;
 ```
 
+Note:
+
+- Here is what temporal DML looks like.
+- No change to INSERT.
+  - Whether it's two timestamp columns or a single range column, no new syntax is needed.
+- `FOR PORTION OF` for UPDATE and DELETE.
+- This syntax requires separate start and end times, but it'd be nice to support ranges there too.
+
+
+
 # System Time
 
 ```sql
@@ -951,9 +1131,10 @@ CREATE TABLE products (
 
 Note:
 
-- So you add these `GENERATED` columns,
+- I've totally ignored the second dimension: system time, but SQL:2011 has that too.
+- You add these `GENERATED` columns (which we support now!),
 - then you define a period with the magic nme `SYSTEM_TIME`,
-- and you saw the table has `SYSTEM VERSIONING`.
+- and you say the table has `SYSTEM VERSIONING`.
 - Then you get automatic transaction-time history.
 - DML (insert/update/delete) works just like a non-temporal table.
 
@@ -1012,6 +1193,7 @@ SELECT * FROM t AS OF TIMESTAMP t;
 
 Note:
 
+- Here is how Oracle does system-time tables.
 - Oracle 12c
 - Just based on reading the docs.
 - Lots of other commands to set it up.
@@ -1045,11 +1227,11 @@ Note:
 
 - Also valid time!
 - Note the "FOR" in the `PERIOD` use. (Easier for the parser?)
-- According to the docs the constituent columns can be nullable, although the standard says they must be `NOT NULL`.
+- According to the docs the constituent columns can be nullable, although the standard says they must be `NOT NULL`. I *think* this just means that it automatically not-null-icates them, like you'd do with a PRIMARY KEY.
 
 
 
-# SQL Server
+# MS SQL Server
 <!-- .slide: style="font-size: 90%" -->
 
 ```sql
@@ -1072,6 +1254,9 @@ Note:
 - You create your product table with the usual `SYSTEM_TIME` `PERIOD`.
 - Then you use this second command to give it system versioning,
   naming the table where the old versions go.
+  - This is a very reasonable implementation for system-time information IMO.
+  - `temporal_tables` and "Tardis for your ORM" take this approach too.
+  - Maybe it'd be nice if it weren't quite so exposed.
 - So I guess you query that table if you want old information.
 - I haven't tested this myself.
 - Also interesting: you can make the `SysFrom` and `SysTil` columns `HIDDEN` so they aren't included in `SELECT *`---just like the `PERIOD`!
@@ -1099,7 +1284,8 @@ CREATE TABLE products (
 
 Note:
 
-- No `WITH SYSTEM VERSIONING`?
+- System time
+- No need for `WITH SYSTEM VERSIONING`.
 - Note `BEGIN` vs `START` in SQL:2011/MariaDB/SQL Server.
 - What is `tx_id` about?
 
@@ -1122,8 +1308,7 @@ CREATE TABLE products (
 
 Note:
 
-- No `WITH SYSTEM VERSIONING`?
-- What is `tx_id` about?
+- Supports valid-time!
 
 
 
@@ -1140,7 +1325,7 @@ CREATE TABLE products (
 
 Note:
 
-- `GENERATED` columns are part of the SQL standard and a patch has been in commitfests for the last year.
+- I've talked about valid-time syntax, but maybe our range-friendly system-time syntax would look like this.
 
 
 
