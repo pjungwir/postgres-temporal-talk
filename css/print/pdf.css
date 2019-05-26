@@ -129,6 +129,33 @@ ul, ol, div, p {
 	z-index: auto !important;
 }
 
+body.with-notes {
+  background: #fff !important;
+  background-color: #fff !important;
+}
+
+body.with-notes .reveal .slide-background {
+  display: none !important;
+}
+
+body.with-notes,
+body.with-notes p,
+body.with-notes td,
+body.with-notes li,
+body.with-notes div {
+  /*
+  font-size: 20pt!important;
+  font-family: Georgia, "Times New Roman", Times, serif !important;
+  */
+  color: #000 !important;
+}
+
+@media print {
+  body.with-notes .backgrounds {
+    background-color: #fff !important;
+  }
+}
+
 /* Display slide speaker notes when 'showNotes' is enabled */
 .reveal.show-notes {
 	max-width: none;

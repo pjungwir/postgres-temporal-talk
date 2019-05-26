@@ -6,3 +6,7 @@
 .reveal ul {
   display: block;
 }
+
+.reveal .speaker-notes-pdf[data-layout="separate-page"] {
+  font-size: 28pt;
+}

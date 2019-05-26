@@ -41,15 +41,29 @@
 			// More info about config & dependencies:
 			// - https://github.com/hakimel/reveal.js#configuration
 			// - https://github.com/hakimel/reveal.js#dependencies
-			Reveal.initialize({
+      var params = {
 				dependencies: [
 					{ src: 'plugin/markdown/marked.js' },
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
 					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
 				]
-			});
+      };
+      // When printing to a PDF,
+      // make the pages tall enough to hold our biggest slides:
+      if (window.location.search.match( /print-pdf/gi )) {
+        params['height'] = 800;
+        // Printing *without* print-pdf gives a white background,
+        // and print-pdf preserves the normal black background.
+        // But print-pdf is the only way to get showNotes=separate-page,
+        // so in that case force the background to white.
+        if (window.location.search.match('showNotes')) {
+          document.getElementsByTagName('body')[0].className += ' with-notes';
+        }
+      }
+			Reveal.initialize(params);
       Reveal.configure({
+        pdfMaxPagesPerSlide: 1,
         keyboard: {
           221: function() { Reveal.slide( Number.MAX_VALUE ); },
         }
