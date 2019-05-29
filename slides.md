@@ -92,7 +92,7 @@ Note:
       - They aren't copying:
         - the product tags,
         - which countries the product was available in,
-        - the product's vendor's 00
+        - the product's vendor's commission
         - cost of inventory is really hard too
       - In practice very few companies can re-generate their 2016 sales report and get the same answers as before.
     - real estate:
@@ -1371,5 +1371,3 @@ Note:
 Note:
 
 - The slides are on Github and include my speaker notes, so hopefully they are more useful than just the pictures.
-
-8:24 start (this computer's clock) - 9:32 end = 1h08m yikes!
