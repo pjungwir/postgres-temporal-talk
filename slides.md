@@ -44,7 +44,7 @@ records events       | records things
 IoT sensors, finance | auditing, history
 challenge is scale   | challenge is complexity
 Partitioning         | ranges, exclusion constraints
-Citus, TimescaleDB   | Teradata, `temporal_tables`
+Citus, TimescaleDB   | `temporal_tables`, Tardis
 
 Note:
 
@@ -115,7 +115,6 @@ Note:
 
 
 
-<!-- .slide: data-transition="slide none" -->
 # OLAP Problems Too
 
 ![star schema](img/star_schema.png)
@@ -130,18 +129,7 @@ Note:
 - The dimensions don't necessarily have history.
   - product changes
   - stores come and ago and change
-
-
-
-<!-- .slide: data-transition="none slide" -->
-# OLAP Problems Too
-
-![The Data Warehouse Toolkit](img/data_warehouse_toolkit.jpg)
-
-Note:
-
-- Ralph Kimball, the #1 proponent & teacher about data warehouses, acknowledges this problem.
-- He calls these "slowly-changing dimensions" (SCDs).
+  - Kimball calls these "slowly-changing dimensions" (SCDs).
 
 
 
@@ -158,8 +146,8 @@ Note:
   - He also brings some reality to Slowly-Changing Dimensions when he asks, "What do you mean slow?"
 
 - Basically none of Kimball's suggestions are very good:
+  - Enough to say that nowadays there are also Types 0, 1.5, 4, 5, 6, and 7!
 - SKIP IT!:
-  - Enough to say that nowadays there are also Types 0, 4, 5, 6, and 7!
   - Kimball's work is amazing: my point is just that temporal data is not just a problem for normalized schemas.
 
 - Type I: overwrite it: ignore the problem: accept bad history.
@@ -841,8 +829,11 @@ Note:
 - Note there aren't any more rows than before:
   - The database invisibly transforms our INSERT into an UPDATE, just moving the date of the original row.
   - If we inserted something in between two other ranges, it would even UPDATE one and DELETE the other!
-- So you need triggers or some kind of built-in functionality: the table has to know it's a temporal table.
-- What to do in Postgres about columns with no equality operator, e.g. json? (Cast json to jsonb first?) But is there a general solution?
+- Actually SQL:2011 leaves this out
+  - So maybe we could/should skip it.
+  - But your table will get more & more finely chopped.
+  - Maybe add an optional trigger function you can attach.
+    - What to do in Postgres about columns with no equality operator, e.g. json? (Cast json to jsonb first?) But is there a general solution?
 
 
 
@@ -918,6 +909,9 @@ Note:
 
 - Of course a regular DELETE is possible too.
 - Even an INSERT is possible, if you DELETE in the middle of an existing record.
+- So with all these INSERT/UPDATE/DELETE commands getting translated into other operations,
+  which triggers fire? And on which rows? And what are their NEW/OLD values?
+  Does SQL:2011 have an opinion?
 
 
 
@@ -1083,6 +1077,7 @@ Note:
 - I'd like to support both PERIODs and ranges.
 - Since the PERIOD name must not conflict with any column names,
   it's easy to accept both without ambiguity.
+- Implementation will probably use ranges with exclusion constraints regardless.
 - Vik Fearing already has a patch that lets you declare PERIODs, but not use them.
 
 
@@ -1110,6 +1105,7 @@ Note:
   - Whether it's two timestamp columns or a single range column, no new syntax is needed.
 - `FOR PORTION OF` for UPDATE and DELETE.
 - This syntax requires separate start and end times, but it'd be nice to support ranges there too.
+- You can't SET the start & end times when doing an UPDATE FOR PORTION OF (which seems reasonable).
 
 
 
@@ -1133,7 +1129,7 @@ Note:
 
 - I've totally ignored the second dimension: system time, but SQL:2011 has that too.
 - You add these `GENERATED` columns (which we support now!),
-- then you define a period with the magic nme `SYSTEM_TIME`,
+- then you define a period with the magic name `SYSTEM_TIME`,
 - and you say the table has `SYSTEM VERSIONING`.
 - Then you get automatic transaction-time history.
 - DML (insert/update/delete) works just like a non-temporal table.
@@ -1371,3 +1367,9 @@ Note:
 Note:
 
 - The slides are on Github and include my speaker notes, so hopefully they are more useful than just the pictures.
+
+
+
+# Thanks!
+
+https://github.com/pjungwir/temporal-databases-postgres-talk
