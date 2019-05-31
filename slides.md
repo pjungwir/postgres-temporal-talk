@@ -663,8 +663,8 @@ Note:
 ```
 ALTER TABLE variants
 ADD CONSTRAINT tfk_variants_product_id
-FOREIGN KEY (product_id, valid_at WITHOUT OVERLAPS)
-REFERENCES (id, valid_at WITHOUT OVERLAPS);
+FOREIGN KEY (product_id, PERIOD valid_at)
+REFERENCES (id, PERIOD valid_at);
 ```
 
 Note:
