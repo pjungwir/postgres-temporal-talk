@@ -12,8 +12,9 @@ Note:
 - independent consultant/programmer from Portland, OR
 
 - used Postgres since ~2010.
-- I've done substantial professional work in Oracle, MySQL, and MS SQL Server, but Postgres is by far the best.
+- I've done plenty of work in Oracle, MySQL, and MS SQL Server, but Postgres is by far the best.
 
+- Humbled to be here. There lots of related work I'll mention today, and I'm amazed by all of you.
 - Not a contributor but I've written a bunch of extensions.
 - Since I'm from Portland: they're pretty obscure, you probably haven't heard of them.
 
@@ -40,10 +41,10 @@ Note:
 time-series | temporal
 ----------- | --------
 single timestamp | two timestamps
-records events       | records things
+records events       | records things, "versions"
 IoT sensors, finance | auditing, history
 challenge is scale   | challenge is complexity
-Partitioning         | ranges, exclusion constraints
+partitioning         | ranges, exclusion constraints
 Citus, TimescaleDB   | `temporal_tables`, Tardis
 
 Note:
@@ -78,39 +79,36 @@ Note:
 
 Note:
 
-- Instead of "temporal databases" maybe we should say "historical databases", because it's about tracking history.
-- (We could store future things too, but that's less common.)
-
-- Accidentally changing history is especially acute in OLTP databases where everything is normalized.
+- A temporal database helps you anywhere you want to keep a history.
+- Losing history is especially acute in OLTP databases where everything is normalized.
 - Almost every project I see the need.
-  - show slides
-    - product price:
-      - stored on your `products` table
-      - when you change it, your orders don't add up any more.
-      - Of course everyone knows this, so they copy the price over to the `line_items` table.
-      - But this is an ad hoc solution.
-      - They aren't copying:
-        - the product tags,
-        - which countries the product was available in,
-        - the product's vendor's commission
-        - cost of inventory is really hard too
-      - In practice very few companies can re-generate their 2016 sales report and get the same answers as before.
-    - real estate:
-      - when did the property change?
-    - employees
-      - You can't give a database talk without an employees table.
-      - You might want to know their salary history, their former positions, former projects, etc.
-    - questionnaires:
-      - For 20 years I've been building the same app over and over:
-        - I call it "some users design forms, some users fill out forms."
-        - I bet a lot of you have been building this thing too.
-      - So what happens when you revise a question?
-      - What if you're asking for Ethnicity and you change the possible answers?
-      - In a normalized database you lose history, and sense can turn into nonsense.
-- Today people just tolerate the errors.
+  - Today people mostly ignore the problem and tolerate the errors.
+  - product price:
+    - stored on your `products` table
+    - when you change it, your orders don't add up any more.
+    - Of course everyone knows this, so they copy the price over to the `line_items` table.
+    - But this is an ad hoc solution.
+    - They aren't copying:
+      - the product tags,
+      - which countries the product was available in,
+      - the product's vendor's commission
+      - cost of inventory is really hard too
+    - In practice very few companies can re-generate their 2016 sales report and get the same answers as before.
+  - real estate:
+    - when did the property change?
+  - employees
+    - You can't give a database talk without an employees table.
+    - You might want to know their salary history, their former positions, former projects, etc.
+  - questionnaires:
+    - For 20 years I've been building the same app over and over:
+      - I call it "some users design forms, some users fill out forms."
+      - I bet a lot of you have been building this thing too.
+    - So what happens when you revise a question?
+    - What if you're asking for Ethnicity and you change the possible answers?
+    - In a normalized database you lose history, and sense can turn into nonsense.
 - Retaining correct history requires foresight:
   - Copying product price to the line item.
-  - Someone told me about a major fast food restaurant that wanted to brag about how much healthier their mayonnaise had become over time, but when they went to look up the details they found they no longer had the data.
+  - Mayonnaise
 - Even when they solve it, they aren't aware of the 30 years of research, so they apply an ad hoc solution.
 
 
@@ -380,7 +378,8 @@ Note:
 - Then you have two start/end pairs, i.e. two ranges.
 - Now it's really getting hard to understand.
 - The two dimensions don't necessary have the same "physical" representation:
-  - maybe the audit history is stored in a separate view.
+  - maybe the audit history is stored in a separate table.
+  - maybe you have some views with instead-of triggers.
   - Snodgrass gives several implementation choices for bitemporal tables.
 
 - I'm going to talk almost exclusively about valid-time.
@@ -502,10 +501,8 @@ EXCLUDE USING gist
 
 Note:
 
-- It's okay if another row has the same id, as long as it's for a different time.
-- It's okay if two records has overlapping time, as long as they have different ids.
 - Like a uniqueness constraint, an exclusion constraint is always backed by an index to enforce it efficiently. Sometimes it can be a regular b-tree index, but when combining a scalar and a range it needs to be a GiST index like here.
-- As far as I know exclusion constraints are a Postgres-only innovation.
+- Exclusion constraints are a Postgres-only innovation.
 
 - We could call this a "temporal primary key".
 - You can do this today, but Postgres doesn't *know* that it's a so-called primay key.
@@ -656,6 +653,23 @@ Note:
 
 - So obviously you don't really want to do this unless you have some help:
   - an extension or better yet native support from your database.
+
+
+
+# Temporal Foreign Keys
+
+![link](img/link.png)<!-- .element style="width:100px; border:none" -->
+
+```
+ALTER TABLE variants
+ADD CONSTRAINT tfk_variants_product_id
+FOREIGN KEY (product_id, valid_at WITHOUT OVERLAPS)
+REFERENCES (id, valid_at WITHOUT OVERLAPS);
+```
+
+Note:
+
+- It's dangerous to go alone, take this.
 
 
 
