@@ -17,3 +17,5 @@ npm start
 You can get a slideshow-able PDF by going to http://localhost:8000/?print-pdf *in Chrome* and printing to a PDF. This is what you want to save as `slides.pdf`.
 
 You can include speaker notes by going to http://localhost:8000/?print-pdf&showNotes=separate-page *in Chrome*, printing to a PDF, then printing the PDF. It uses a custom hack to get separate-page speaker notes with a white background. This is what you want to print before you give the talk.
+
+You can also find [video of my talk](https://www.youtube.com/watch?v=vDvgxUd7uiM) on YouTube.
