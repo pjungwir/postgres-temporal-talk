@@ -1253,7 +1253,7 @@ CREATE TABLE dbo.Products (
   Price   decimal(10, 2),
   PERIOD FOR SYSTEM_TIME (SysFrom, SysTil)
 ) WITH (
-  SYSTEM VERSIONING = ON
+  SYSTEM_VERSIONING = ON
     (HISTORY TABLE = dbo.ProductsHistory)
 );
 ```
